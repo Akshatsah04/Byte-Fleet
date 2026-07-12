@@ -44,11 +44,128 @@ export const DataProvider = ({ children }) => {
   const [fuelLogs, setFuelLogs] = useState(() => loadArrayState("transitops_fuelLogs", initialFuelLogs));
   const [expenses, setExpenses] = useState(() => loadArrayState("transitops_expenses", initialExpenses));
   const [currentUser, setCurrentUser] = useState(() => loadUserState("transitops_currentUser", null));
-
-
   const [alerts, setAlerts] = useState([]);
 
-  // Persist state changes
+  const API_BASE = "http://localhost:5000/api";
+
+  // Mappers
+  const mapBackendVehicleToFrontend = (v) => ({
+    id: v.id,
+    name: v.name,
+    regNumber: v.registrationNo,
+    type: v.type,
+    capacity: v.maxLoadCapacity,
+    odometer: v.odometer,
+    acquisitionCost: v.acquisitionCost,
+    status: v.status === "AVAILABLE" ? "Available" :
+            v.status === "ON_TRIP" ? "On Trip" :
+            v.status === "IN_SHOP" ? "In Shop" :
+            v.status === "RETIRED" ? "Retired" : "Available",
+    lastService: v.lastService ? v.lastService.split("T")[0] : null
+  });
+
+  const mapFrontendVehicleToBackend = (v) => ({
+    registrationNo: v.regNumber,
+    name: v.name,
+    type: v.type,
+    maxLoadCapacity: Number(v.capacity),
+    odometer: Number(v.odometer),
+    acquisitionCost: Number(v.acquisitionCost),
+    status: v.status === "Available" ? "AVAILABLE" :
+            v.status === "On Trip" ? "ON_TRIP" :
+            v.status === "In Shop" ? "IN_SHOP" :
+            v.status === "Retired" ? "RETIRED" : "AVAILABLE",
+    lastService: v.lastService ? new Date(v.lastService).toISOString() : null
+  });
+
+  const mapBackendDriverToFrontend = (d) => ({
+    id: d.id,
+    name: d.name,
+    licenseNumber: d.licenseNumber,
+    licenseCategory: d.licenseCategory,
+    licenseExpiry: d.licenseExpiryDate ? d.licenseExpiryDate.split("T")[0] : null,
+    contact: d.contactNumber,
+    completedTrips: d.trips ? d.trips.filter(t => t.status === "COMPLETED").length : 0,
+    safetyScore: d.safetyScore,
+    status: d.status === "AVAILABLE" ? "Available" :
+            d.status === "ON_TRIP" ? "On Trip" :
+            d.status === "OFF_DUTY" ? "Off Duty" :
+            d.status === "SUSPENDED" ? "Suspended" : "Available",
+    avatar: d.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
+  });
+
+  const mapFrontendDriverToBackend = (d) => ({
+    name: d.name,
+    licenseNumber: d.licenseNumber,
+    licenseCategory: d.licenseCategory,
+    licenseExpiryDate: new Date(d.licenseExpiry).toISOString(),
+    contactNumber: d.contact,
+    safetyScore: Number(d.safetyScore || 90),
+    status: d.status === "Available" ? "AVAILABLE" :
+            d.status === "On Trip" ? "ON_TRIP" :
+            d.status === "Off Duty" ? "OFF_DUTY" :
+            d.status === "Suspended" ? "SUSPENDED" : "AVAILABLE"
+  });
+
+  const mapBackendTripToFrontend = (t) => ({
+    id: t.id,
+    route: `${t.source} ➔ ${t.destination}`,
+    vehicleId: t.vehicleId,
+    driverId: t.driverId,
+    cargoWeight: t.cargoWeight,
+    distance: t.plannedDistance,
+    departure: t.dispatchedAt ? t.dispatchedAt.split(".")[0] : null,
+    estimatedArrival: t.estimatedArrival || null,
+    actualArrival: t.completedAt ? t.completedAt.split(".")[0] : null,
+    revenue: t.revenue || 0,
+    cost: t.cost || 0,
+    status: t.status === "DRAFT" ? "Draft" :
+            t.status === "DISPATCHED" ? "Dispatched" :
+            t.status === "COMPLETED" ? "Completed" :
+            t.status === "CANCELLED" ? "Cancelled" : "Draft",
+    notes: t.notes || ""
+  });
+
+  const mapBackendRoleToFrontend = (role) => {
+    switch (role) {
+      case "FLEET_MANAGER": return "Fleet Manager";
+      case "DISPATCHER": return "Dispatcher";
+      case "SAFETY_OFFICER": return "Safety Officer";
+      case "FINANCIAL_ANALYST": return "Financial Analyst";
+      default: return role;
+    }
+  };
+
+  // Sync data from Backend API on mount (hybrid resilience)
+  useEffect(() => {
+    const fetchBackendData = async () => {
+      try {
+        const [vehiclesRes, driversRes, tripsRes] = await Promise.all([
+          fetch(`${API_BASE}/vehicles`),
+          fetch(`${API_BASE}/drivers`),
+          fetch(`${API_BASE}/trips`)
+        ]);
+
+        if (vehiclesRes.ok) {
+          const vData = await vehiclesRes.json();
+          setVehicles(vData.map(mapBackendVehicleToFrontend));
+        }
+        if (driversRes.ok) {
+          const dData = await driversRes.json();
+          setDrivers(dData.map(mapBackendDriverToFrontend));
+        }
+        if (tripsRes.ok) {
+          const tData = await tripsRes.json();
+          setTrips(tData.map(mapBackendTripToFrontend));
+        }
+      } catch (err) {
+        console.warn("Backend API offline. Running in standalone mock mode.", err);
+      }
+    };
+    fetchBackendData();
+  }, []);
+
+  // Persist state changes locally as secondary cache
   useEffect(() => {
     localStorage.setItem("transitops_vehicles", JSON.stringify(vehicles));
   }, [vehicles]);
@@ -174,32 +291,44 @@ export const DataProvider = ({ children }) => {
       }
     });
 
-
     setAlerts(newAlerts);
   }, [drivers, vehicles, trips, fuelLogs]);
 
   // Auth Operations
-  const login = (email, password) => {
-    // Basic validations
+  const login = async (email, password) => {
     if (!email || !password) {
       throw new Error("Please enter both email and password.");
     }
-    const foundUser = initialUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (!foundUser) {
-      throw new Error("Invalid credentials. Try our quick-access demo accounts.");
-    }
-    // For demo purposes, we accept "password" or any matching account
-    if (password !== "password" && password !== "admin123" && password.length < 4) {
-      throw new Error("Incorrect password. Try using 'password' for demo accounts.");
-    }
-    
-    // Safety check: Simulating account locking for locked state testing
-    if (email.includes("locked")) {
-      throw new Error("Account temporarily locked due to multiple failed login attempts. Contact safety admin.");
-    }
+    try {
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Invalid credentials.");
+      }
 
-    setCurrentUser(foundUser);
-    return foundUser;
+      const mappedUser = {
+        id: data.user.id,
+        name: data.user.name,
+        email: data.user.email,
+        role: mapBackendRoleToFrontend(data.user.role),
+        status: "Active",
+        lastActive: "Active now"
+      };
+      setCurrentUser(mappedUser);
+      return mappedUser;
+    } catch (err) {
+      console.warn("Backend login failed, using local fallback...", err.message);
+      const foundUser = initialUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+      if (!foundUser) {
+        throw new Error("Invalid credentials. Try our quick-access demo accounts or run the backend.");
+      }
+      setCurrentUser(foundUser);
+      return foundUser;
+    }
   };
 
   const logout = () => {
@@ -211,7 +340,6 @@ export const DataProvider = ({ children }) => {
     if (foundUser) {
       setCurrentUser(foundUser);
     } else {
-      // Create a temporary user with this role
       setCurrentUser({
         id: `U-temp-${roleName.replace(" ", "")}`,
         name: `Demo ${roleName}`,
@@ -224,11 +352,26 @@ export const DataProvider = ({ children }) => {
   };
 
   // Vehicle Registry Operations
-  const addVehicle = (vehicle) => {
-    // Unique registration validation
+  const addVehicle = async (vehicle) => {
     const regExists = vehicles.some(v => v.regNumber.toUpperCase() === vehicle.regNumber.toUpperCase());
     if (regExists) {
       throw new Error(`Vehicle registration number ${vehicle.regNumber} already exists in the system.`);
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/vehicles`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mapFrontendVehicleToBackend(vehicle))
+      });
+      if (res.ok) {
+        const newV = await res.json();
+        const mapped = mapBackendVehicleToFrontend(newV);
+        setVehicles(prev => [mapped, ...prev]);
+        return mapped;
+      }
+    } catch (e) {
+      console.warn("Backend addVehicle failed. Saving locally.", e);
     }
 
     const newVehicle = {
@@ -240,57 +383,110 @@ export const DataProvider = ({ children }) => {
       status: vehicle.status || "Available",
       lastService: vehicle.lastService || new Date().toISOString().split("T")[0]
     };
-
     setVehicles(prev => [newVehicle, ...prev]);
     return newVehicle;
   };
 
   // Driver Management Operations
-  const addDriver = (driver) => {
+  const addDriver = async (driver) => {
+    try {
+      const res = await fetch(`${API_BASE}/drivers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mapFrontendDriverToBackend(driver))
+      });
+      if (res.ok) {
+        const newD = await res.json();
+        const mapped = mapBackendDriverToFrontend(newD);
+        setDrivers(prev => [mapped, ...prev]);
+        return mapped;
+      }
+    } catch (e) {
+      console.warn("Backend addDriver failed. Saving locally.", e);
+    }
+
     const newDriver = {
       ...driver,
       id: `D-${200 + drivers.length + 1}`,
       completedTrips: 0,
-      safetyScore: 90, // Default good safety score
+      safetyScore: 90,
       status: driver.status || "Available",
       avatar: driver.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"
     };
-
     setDrivers(prev => [newDriver, ...prev]);
     return newDriver;
   };
 
-  const updateDriverStatus = (driverId, newStatus) => {
+  const updateDriverStatus = async (driverId, newStatus) => {
+    try {
+      const res = await fetch(`${API_BASE}/drivers/${driverId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: newStatus === "Available" ? "AVAILABLE" :
+                  newStatus === "On Trip" ? "ON_TRIP" :
+                  newStatus === "Off Duty" ? "OFF_DUTY" :
+                  newStatus === "Suspended" ? "SUSPENDED" : "AVAILABLE"
+        })
+      });
+      if (res.ok) {
+        const updatedD = await res.json();
+        const mapped = mapBackendDriverToFrontend(updatedD);
+        setDrivers(prev => prev.map(d => d.id === driverId ? mapped : d));
+        return;
+      }
+    } catch (e) {
+      console.warn("Backend updateDriverStatus failed.", e);
+    }
     setDrivers(prev => prev.map(d => d.id === driverId ? { ...d, status: newStatus } : d));
   };
 
   // Trip Management Operations
-  const createTrip = (tripData) => {
-    // Find vehicle
+  const createTrip = async (tripData) => {
     const vehicle = vehicles.find(v => v.id === tripData.vehicleId);
     if (!vehicle) throw new Error("Selected vehicle not found.");
-
-    // Cargo weight validation
     if (Number(tripData.cargoWeight) > vehicle.capacity) {
       const diff = Number(tripData.cargoWeight) - vehicle.capacity;
       throw new Error(`Cargo exceeds this vehicle's maximum capacity by ${diff} kg.`);
     }
 
-    // Driver eligibility check
     const driver = drivers.find(d => d.id === tripData.driverId);
     if (!driver) throw new Error("Selected driver not found.");
 
-    if (driver.status === "Suspended") {
-      throw new Error(`Driver cannot be assigned because they are currently Suspended.`);
-    }
-    if (driver.status === "Off Duty") {
-      throw new Error(`Driver cannot be assigned because they are currently Off Duty.`);
-    }
-    
-    // Check license expiry
-    const today = new Date("2026-07-12");
-    if (new Date(driver.licenseExpiry) < today) {
-      throw new Error(`Driver cannot be assigned because the license expired on ${driver.licenseExpiry}.`);
+    const routeParts = `${tripData.source} ➔ ${tripData.destination}`.split(" ➔ ");
+    const payload = {
+      source: routeParts[0] || "Unknown",
+      destination: routeParts[1] || "Unknown",
+      cargoWeight: Number(tripData.cargoWeight),
+      plannedDistance: Number(tripData.distance),
+      status: tripData.status === "Dispatched" ? "DISPATCHED" : "DRAFT",
+      revenue: Number(tripData.revenue),
+      cost: 0,
+      notes: tripData.notes || "",
+      vehicleId: tripData.vehicleId,
+      driverId: tripData.driverId
+    };
+
+    try {
+      const res = await fetch(`${API_BASE}/trips`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const newTrip = await res.json();
+        const mapped = mapBackendTripToFrontend(newTrip);
+
+        if (mapped.status === "Dispatched") {
+          setVehicles(prev => prev.map(v => v.id === tripData.vehicleId ? { ...v, status: "On Trip" } : v));
+          setDrivers(prev => prev.map(d => d.id === tripData.driverId ? { ...d, status: "On Trip" } : d));
+        }
+
+        setTrips(prev => [mapped, ...prev]);
+        return mapped;
+      }
+    } catch (e) {
+      console.warn("Backend createTrip failed. Saving locally.", e);
     }
 
     const newTrip = {
@@ -304,12 +500,11 @@ export const DataProvider = ({ children }) => {
       estimatedArrival: tripData.estimatedArrival,
       actualArrival: null,
       revenue: Number(tripData.revenue),
-      cost: 0, // Calculated later
+      cost: 0,
       status: tripData.status || "Draft",
       notes: tripData.notes || ""
     };
 
-    // If dispatched immediately
     if (newTrip.status === "Dispatched") {
       setVehicles(prev => prev.map(v => v.id === tripData.vehicleId ? { ...v, status: "On Trip" } : v));
       setDrivers(prev => prev.map(d => d.id === tripData.driverId ? { ...d, status: "On Trip" } : d));
@@ -319,22 +514,43 @@ export const DataProvider = ({ children }) => {
     return newTrip;
   };
 
-  const dispatchTrip = (tripId) => {
+  const dispatchTrip = async (tripId) => {
     const trip = trips.find(t => t.id === tripId);
     if (!trip) throw new Error("Trip not found");
 
-    // Double check availability
-    const vehicle = vehicles.find(v => v.id === trip.vehicleId);
-    const driver = drivers.find(d => d.id === trip.driverId);
+    try {
+      const res = await fetch(`${API_BASE}/trips/${tripId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "DISPATCHED",
+          dispatchedAt: new Date().toISOString()
+        })
+      });
+      if (res.ok) {
+        // Update vehicles and drivers statuses to ON_TRIP
+        await fetch(`${API_BASE}/vehicles/${trip.vehicleId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "ON_TRIP" })
+        }).catch(e => console.warn(e));
 
-    if (vehicle.status !== "Available") {
-      throw new Error(`Vehicle ${vehicle.regNumber} is not Available (Current: ${vehicle.status})`);
-    }
-    if (driver.status !== "Available") {
-      throw new Error(`Driver ${driver.name} is not Available (Current: ${driver.status})`);
+        await fetch(`${API_BASE}/drivers/${trip.driverId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "ON_TRIP" })
+        }).catch(e => console.warn(e));
+
+        setTrips(prev => prev.map(t => t.id === tripId ? { ...t, status: "Dispatched", departure: new Date().toISOString().split(".")[0] } : t));
+        setVehicles(prev => prev.map(v => v.id === trip.vehicleId ? { ...v, status: "On Trip" } : v));
+        setDrivers(prev => prev.map(d => d.id === trip.driverId ? { ...d, status: "On Trip" } : d));
+        return;
+      }
+    } catch (e) {
+      console.warn("Backend dispatchTrip failed. Updating locally.", e);
     }
 
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, status: "Dispatched" } : t));
+    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, status: "Dispatched", departure: new Date().toISOString().split(".")[0] } : t));
     setVehicles(prev => prev.map(v => v.id === trip.vehicleId ? { ...v, status: "On Trip" } : v));
     setDrivers(prev => prev.map(d => d.id === trip.driverId ? { ...d, status: "On Trip" } : d));
   };

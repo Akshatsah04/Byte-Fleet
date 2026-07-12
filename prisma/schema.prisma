@@ -2,6 +2,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../Backend/node_modules/.prisma/client"
 }
 
 datasource db {
@@ -16,6 +17,7 @@ enum Role {
   DRIVER
   SAFETY_OFFICER
   FINANCIAL_ANALYST
+  DISPATCHER
 }
 
 enum VehicleStatus {
@@ -68,6 +70,7 @@ model Vehicle {
   odometer         Float         @default(0)
   acquisitionCost  Float
   status           VehicleStatus @default(AVAILABLE)
+  lastService      DateTime?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
@@ -104,6 +107,9 @@ model Trip {
   actualDistance  Float?
   fuelConsumed    Float?
   status          TripStatus @default(DRAFT)
+  revenue         Float      @default(0)
+  cost            Float      @default(0)
+  notes           String?    @default("")
 
   vehicleId       String
   vehicle         Vehicle    @relation(fields: [vehicleId], references: [id])

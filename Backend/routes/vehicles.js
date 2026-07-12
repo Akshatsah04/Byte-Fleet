@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const prisma = require("../lib/prisma");
+const prisma = require("../config/prisma");
 
 // GET all vehicles
 router.get("/", async (req, res) => {
@@ -51,6 +51,8 @@ router.post("/", async (req, res) => {
       maxLoadCapacity,
       odometer,
       acquisitionCost,
+      status,
+      lastService
     } = req.body;
 
     const vehicle = await prisma.vehicle.create({
@@ -58,9 +60,11 @@ router.post("/", async (req, res) => {
         registrationNo,
         name,
         type,
-        maxLoadCapacity,
-        odometer,
-        acquisitionCost,
+        maxLoadCapacity: Number(maxLoadCapacity),
+        odometer: Number(odometer),
+        acquisitionCost: Number(acquisitionCost),
+        status: status || "AVAILABLE",
+        lastService: lastService ? new Date(lastService) : null
       },
     });
 
