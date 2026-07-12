@@ -110,6 +110,7 @@ model Trip {
   revenue         Float      @default(0)
   cost            Float      @default(0)
   notes           String?    @default("")
+  estimatedArrival DateTime?
 
   vehicleId       String
   vehicle         Vehicle    @relation(fields: [vehicleId], references: [id])
