@@ -53,7 +53,9 @@ export const Drivers = () => {
   // Summary statistics
   const stats = useMemo(() => {
     let expiringSoonCount = 0;
-    drivers.forEach(d => {
+    const safeDrivers = drivers || [];
+    safeDrivers.forEach(d => {
+      if (!d || !d.licenseExpiry) return;
       const expiry = new Date(d.licenseExpiry);
       const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
       if (diffDays >= 0 && diffDays <= 30) {
@@ -62,26 +64,26 @@ export const Drivers = () => {
     });
 
     return {
-      total: drivers.length,
-      available: drivers.filter(d => d.status === "Available").length,
-      onTrip: drivers.filter(d => d.status === "On Trip").length,
-      offDuty: drivers.filter(d => d.status === "Off Duty").length,
-      suspended: drivers.filter(d => d.status === "Suspended").length,
+      total: safeDrivers.filter(Boolean).length,
+      available: safeDrivers.filter(d => d && d.status === "Available").length,
+      onTrip: safeDrivers.filter(d => d && d.status === "On Trip").length,
+      offDuty: safeDrivers.filter(d => d && d.status === "Off Duty").length,
+      suspended: safeDrivers.filter(d => d && d.status === "Suspended").length,
       expiringSoon: expiringSoonCount
     };
   }, [drivers, today]);
 
   // Handle Search & Filter logic
   const processedDrivers = useMemo(() => {
-    let result = [...drivers];
+    let result = (drivers || []).filter(Boolean);
 
     // Search
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(
         d =>
-          d.name.toLowerCase().includes(q) ||
-          d.licenseNumber.toLowerCase().includes(q)
+          (d.name && d.name.toLowerCase().includes(q)) ||
+          (d.licenseNumber && d.licenseNumber.toLowerCase().includes(q))
       );
     }
 
@@ -98,6 +100,7 @@ export const Drivers = () => {
     // Validity filter (Expired, Expiring Soon, Valid)
     if (validityFilter !== "All") {
       result = result.filter(d => {
+        if (!d.licenseExpiry) return false;
         const expiry = new Date(d.licenseExpiry);
         const diffDays = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
 
@@ -115,10 +118,11 @@ export const Drivers = () => {
     // Safety Score Filter
     if (scoreFilter !== "All") {
       result = result.filter(d => {
-        if (scoreFilter === "Excellent (90+)") return d.safetyScore >= 90;
-        if (scoreFilter === "Good (80-89)") return d.safetyScore >= 80 && d.safetyScore < 90;
-        if (scoreFilter === "Fair (70-79)") return d.safetyScore >= 70 && d.safetyScore < 80;
-        if (scoreFilter === "Critical (<70)") return d.safetyScore < 70;
+        const score = d.safetyScore || 0;
+        if (scoreFilter === "Excellent (90+)") return score >= 90;
+        if (scoreFilter === "Good (80-89)") return score >= 80 && score < 90;
+        if (scoreFilter === "Fair (70-79)") return score >= 70 && score < 80;
+        if (scoreFilter === "Critical (<70)") return score < 70;
         return true;
       });
     }
@@ -397,7 +401,7 @@ export const Drivers = () => {
                     <td className="py-3 px-4">
                       <div className="flex items-center space-x-3">
                         <img
-                          src={driver.avatar}
+                          src={driver.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"}
                           alt={driver.name}
                           className="w-8 h-8 rounded-full bg-slate-100 object-cover"
                         />
@@ -422,10 +426,10 @@ export const Drivers = () => {
                         <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full ${getSafetyScoreColor(driver.safetyScore)}`}
-                            style={{ width: `${driver.safetyScore}%` }}
+                            style={{ width: `${driver.safetyScore || 0}%` }}
                           />
                         </div>
-                        <span className="font-bold text-slate-900 w-5 text-right">{driver.safetyScore}</span>
+                        <span className="font-bold text-slate-900 w-5 text-right">{driver.safetyScore || 0}</span>
                       </div>
                     </td>
                     <td className="py-3 px-3 text-center">
@@ -651,7 +655,7 @@ export const Drivers = () => {
             <div className="px-6 py-5 border-b border-[#E2E8F0] flex items-center justify-between bg-[#F8FAFC]">
               <div className="flex items-center space-x-3">
                 <img
-                  src={selectedDriver.avatar}
+                  src={selectedDriver.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"}
                   alt={selectedDriver.name}
                   className="w-10 h-10 rounded-full object-cover bg-slate-100 border border-slate-200"
                 />
@@ -770,13 +774,13 @@ export const Drivers = () => {
                     <span className="text-slate-400 font-semibold">Safety Score Rating</span>
                     <span className="font-bold text-slate-900 text-sm flex items-center gap-1">
                       <Award className="w-4.5 h-4.5 text-yellow-500 fill-yellow-500/20" />
-                      {selectedDriver.safetyScore} / 100
+                      {selectedDriver.safetyScore || 0} / 100
                     </span>
                   </div>
                   <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full ${getSafetyScoreColor(selectedDriver.safetyScore)}`}
-                      style={{ width: `${selectedDriver.safetyScore}%` }}
+                      style={{ width: `${selectedDriver.safetyScore || 0}%` }}
                     />
                   </div>
 
