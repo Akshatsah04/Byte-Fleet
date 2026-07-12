@@ -265,7 +265,7 @@ export const DataProvider = ({ children }) => {
             id: `alert-trip-delayed-${t.id}`,
             type: "danger",
             title: `Trip Delayed: ${t.id}`,
-            message: `Trip ${t.id} (${t.route}) has exceeded its estimated arrival time of ${t.estimatedArrival.replace("T", " ")}.`,
+            message: `Trip ${t.id} (${t.route}) has exceeded its estimated arrival time of ${(t.estimatedArrival || "").replace("T", " ")}.`,
             actionable: true,
             link: "/trips",
             category: "Operations"

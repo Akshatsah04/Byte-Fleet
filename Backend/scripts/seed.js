@@ -127,6 +127,7 @@ async function main() {
         revenue: t.revenue || 0,
         cost: t.cost || 0,
         notes: t.notes || "",
+        estimatedArrival: t.estimatedArrival ? new Date(t.estimatedArrival) : null,
         vehicleId: t.vehicleId,
         driverId: t.driverId,
         dispatchedAt: t.departure ? new Date(t.departure) : null,
