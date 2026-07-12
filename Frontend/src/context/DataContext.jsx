@@ -12,41 +12,39 @@ import {
 const DataContext = createContext(null);
 
 export const DataProvider = ({ children }) => {
-  // Load initial state from localStorage or use mockData
-  const [vehicles, setVehicles] = useState(() => {
-    const saved = localStorage.getItem("transitops_vehicles");
-    return saved ? JSON.parse(saved) : initialVehicles;
-  });
+  // Robust parser wrappers to prevent corrupted/null localStorage crashes
+  const loadArrayState = (key, fallback) => {
+    try {
+      const saved = localStorage.getItem(key);
+      if (!saved || saved === "undefined" || saved === "null") return fallback;
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : fallback;
+    } catch (e) {
+      console.error(`Error loading state for key ${key}:`, e);
+      return fallback;
+    }
+  };
 
-  const [drivers, setDrivers] = useState(() => {
-    const saved = localStorage.getItem("transitops_drivers");
-    return saved ? JSON.parse(saved) : initialDrivers;
-  });
+  const loadUserState = (key, fallback) => {
+    try {
+      const saved = localStorage.getItem(key);
+      if (!saved || saved === "undefined" || saved === "null") return fallback;
+      const parsed = JSON.parse(saved);
+      return parsed && typeof parsed === "object" ? parsed : fallback;
+    } catch (e) {
+      console.error(`Error loading user state for key ${key}:`, e);
+      return fallback;
+    }
+  };
 
-  const [trips, setTrips] = useState(() => {
-    const saved = localStorage.getItem("transitops_trips");
-    return saved ? JSON.parse(saved) : initialTrips;
-  });
+  const [vehicles, setVehicles] = useState(() => loadArrayState("transitops_vehicles", initialVehicles));
+  const [drivers, setDrivers] = useState(() => loadArrayState("transitops_drivers", initialDrivers));
+  const [trips, setTrips] = useState(() => loadArrayState("transitops_trips", initialTrips));
+  const [maintenance, setMaintenance] = useState(() => loadArrayState("transitops_maintenance", initialMaintenance));
+  const [fuelLogs, setFuelLogs] = useState(() => loadArrayState("transitops_fuelLogs", initialFuelLogs));
+  const [expenses, setExpenses] = useState(() => loadArrayState("transitops_expenses", initialExpenses));
+  const [currentUser, setCurrentUser] = useState(() => loadUserState("transitops_currentUser", null));
 
-  const [maintenance, setMaintenance] = useState(() => {
-    const saved = localStorage.getItem("transitops_maintenance");
-    return saved ? JSON.parse(saved) : initialMaintenance;
-  });
-
-  const [fuelLogs, setFuelLogs] = useState(() => {
-    const saved = localStorage.getItem("transitops_fuelLogs");
-    return saved ? JSON.parse(saved) : initialFuelLogs;
-  });
-
-  const [expenses, setExpenses] = useState(() => {
-    const saved = localStorage.getItem("transitops_expenses");
-    return saved ? JSON.parse(saved) : initialExpenses;
-  });
-
-  const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem("transitops_currentUser");
-    return saved ? JSON.parse(saved) : null;
-  });
 
   const [alerts, setAlerts] = useState([]);
 
@@ -89,7 +87,8 @@ export const DataProvider = ({ children }) => {
     const today = new Date("2026-07-12"); // Fixed reference current date for mock logic
 
     // Check expiring driver licenses
-    drivers.forEach(driver => {
+    (drivers || []).forEach(driver => {
+      if (!driver || !driver.licenseExpiry) return;
       const expiry = new Date(driver.licenseExpiry);
       const diffTime = expiry - today;
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -118,7 +117,8 @@ export const DataProvider = ({ children }) => {
     });
 
     // Check overdue vehicle maintenance
-    vehicles.forEach(v => {
+    (vehicles || []).forEach(v => {
+      if (!v || !v.lastService) return;
       if (v.status !== "In Shop" && v.status !== "Retired") {
         const lastServDate = new Date(v.lastService);
         const timeDiff = today - lastServDate;
@@ -138,8 +138,9 @@ export const DataProvider = ({ children }) => {
       }
     });
 
-    // Check delayed trips (mock rule: if dispatched and estimated arrival is past current time 2026-07-12 14:00)
-    trips.forEach(t => {
+    // Check delayed trips
+    (trips || []).forEach(t => {
+      if (!t || !t.estimatedArrival) return;
       if (t.status === "Dispatched") {
         const estArrival = new Date(t.estimatedArrival);
         if (estArrival < today) {
@@ -157,9 +158,10 @@ export const DataProvider = ({ children }) => {
     });
 
     // Check fuel efficiency drops
-    fuelLogs.forEach(f => {
+    (fuelLogs || []).forEach(f => {
+      if (!f || f.fuelEfficiency === undefined) return;
       if (f.fuelEfficiency < 2.5) {
-        const vehicle = vehicles.find(v => v.id === f.vehicleId);
+        const vehicle = (vehicles || []).find(v => v && v.id === f.vehicleId);
         newAlerts.push({
           id: `alert-fuel-drop-${f.id}`,
           type: "warning",
@@ -171,6 +173,7 @@ export const DataProvider = ({ children }) => {
         });
       }
     });
+
 
     setAlerts(newAlerts);
   }, [drivers, vehicles, trips, fuelLogs]);
