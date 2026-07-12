@@ -1,3 +1,5 @@
+const authRoutes = require("./routes/authRoutes");
+
 const express = require("express");
 const cors = require("cors");
 
@@ -11,5 +13,7 @@ app.get("/", (req, res) => {
     message: "Byte Fleet Backend Running 🚛",
   });
 });
+
+app.use("/api/auth", authRoutes);
 
 module.exports = app;
