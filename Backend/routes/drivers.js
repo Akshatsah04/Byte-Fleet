@@ -4,8 +4,21 @@ const prisma = require("../config/prisma");
 
 // GET all drivers
 router.get("/", async (req, res) => {
-  const drivers = await prisma.driver.findMany();
-  res.json(drivers);
+  try {
+    const drivers = await prisma.driver.findMany({
+      include: {
+        trips: {
+          select: {
+            status: true
+          }
+        }
+      }
+    });
+    res.json(drivers);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to fetch drivers" });
+  }
 });
 
 // GET one driver
