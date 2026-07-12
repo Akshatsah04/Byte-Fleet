@@ -540,7 +540,7 @@ export const Dashboard = () => {
                     </td>
                     <td className="py-3">{driver?.name || trip.driverId}</td>
                     <td className="py-3">{formatWeight(trip.cargoWeight)}</td>
-                    <td className="py-3">{trip.estimatedArrival.replace("T", " ")}</td>
+                    <td className="py-3">{(trip.estimatedArrival || "").replace("T", " ")}</td>
                     <td className="py-3">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${getStatusBadgeStyles(trip.status)}`}>
                         {trip.status}

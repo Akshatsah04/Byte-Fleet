@@ -392,11 +392,11 @@ export const Trips = () => {
                     <td className="py-4 px-3 text-[10px] text-slate-500 space-y-0.5 font-semibold">
                       <div className="flex items-center gap-1">
                         <span className="text-slate-400">DEP:</span>
-                        <span>{trip.departure.replace("T", " ")}</span>
+                        <span>{(trip.departure || "").replace("T", " ")}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-slate-400">ARR:</span>
-                        <span>{trip.estimatedArrival.replace("T", " ")}</span>
+                        <span>{(trip.estimatedArrival || "").replace("T", " ")}</span>
                       </div>
                     </td>
 
