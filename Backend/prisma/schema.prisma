@@ -1,0 +1,169 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // change to "mysql" or "sqlite" if needed
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------- ENUMS ----------------------
+
+enum Role {
+  FLEET_MANAGER
+  DRIVER
+  SAFETY_OFFICER
+  FINANCIAL_ANALYST
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  ON_TRIP
+  IN_SHOP
+  RETIRED
+}
+
+enum DriverStatus {
+  AVAILABLE
+  ON_TRIP
+  OFF_DUTY
+  SUSPENDED
+}
+
+enum TripStatus {
+  DRAFT
+  DISPATCHED
+  COMPLETED
+  CANCELLED
+}
+
+enum MaintenanceStatus {
+  ACTIVE
+  CLOSED
+}
+
+// ---------------------- MODELS ----------------------
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // If Driver role users are linked to a Driver profile
+  driverProfile Driver? @relation("UserDriverProfile")
+}
+
+model Vehicle {
+  id               String        @id @default(uuid())
+  registrationNo   String        @unique
+  name             String        // Vehicle Name/Model
+  type             String
+  maxLoadCapacity  Float         // in kg
+  odometer         Float         @default(0)
+  acquisitionCost  Float
+  status           VehicleStatus @default(AVAILABLE)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  trips            Trip[]
+  maintenanceLogs  Maintenance[]
+  fuelLogs         FuelLog[]
+  expenses         Expense[]
+}
+
+model Driver {
+  id                String       @id @default(uuid())
+  userId            String?      @unique
+  user              User?        @relation("UserDriverProfile", fields: [userId], references: [id])
+
+  name              String
+  licenseNumber     String       @unique
+  licenseCategory   String
+  licenseExpiryDate DateTime
+  contactNumber     String
+  safetyScore       Float        @default(100)
+  status            DriverStatus @default(AVAILABLE)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  trips             Trip[]
+}
+
+model Trip {
+  id              String     @id @default(uuid())
+  source          String
+  destination     String
+  cargoWeight     Float      // must be <= vehicle.maxLoadCapacity, validated in app logic
+  plannedDistance Float
+  actualDistance  Float?
+  fuelConsumed    Float?
+  status          TripStatus @default(DRAFT)
+
+  vehicleId       String
+  vehicle         Vehicle    @relation(fields: [vehicleId], references: [id])
+
+  driverId        String
+  driver          Driver     @relation(fields: [driverId], references: [id])
+
+  dispatchedAt    DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  fuelLogs        FuelLog[]
+  expenses        Expense[]
+}
+
+model Maintenance {
+  id          String            @id @default(uuid())
+  vehicleId   String
+  vehicle     Vehicle           @relation(fields: [vehicleId], references: [id])
+
+  description String            // e.g. "Oil Change"
+  cost        Float
+  status      MaintenanceStatus @default(ACTIVE)
+
+  startedAt   DateTime          @default(now())
+  closedAt    DateTime?
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model FuelLog {
+  id        String   @id @default(uuid())
+  vehicleId String
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id])
+
+  tripId    String?
+  trip      Trip?    @relation(fields: [tripId], references: [id])
+
+  liters    Float
+  cost      Float
+  date      DateTime @default(now())
+
+  createdAt DateTime @default(now())
+}
+
+model Expense {
+  id        String   @id @default(uuid())
+  vehicleId String
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id])
+
+  tripId    String?
+  trip      Trip?    @relation(fields: [tripId], references: [id])
+
+  type      String   // e.g. "Toll", "Maintenance", "Other"
+  amount    Float
+  date      DateTime @default(now())
+
+  createdAt DateTime @default(now())
+}
