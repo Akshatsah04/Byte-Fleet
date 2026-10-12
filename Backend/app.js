@@ -1,10 +1,10 @@
+const express = require("express");
+const cors = require("cors");
+
 const authRoutes = require("./routes/authRoutes");
 const vehicleRoutes = require("./routes/vehicles");
 const driverRoutes = require("./routes/drivers");
 const tripRoutes = require("./routes/trips");
-
-const express = require("express");
-const cors = require("cors");
 
 const app = express();
 
