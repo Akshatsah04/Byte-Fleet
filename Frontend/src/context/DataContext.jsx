@@ -46,7 +46,7 @@ export const DataProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(() => loadUserState("transitops_currentUser", null));
   const [alerts, setAlerts] = useState([]);
 
-  const API_BASE = "http://localhost:5000/api";
+  const API_BASE = "https://byte-fleet-backend.vercel.app/api";
 
   // Mappers
   const mapBackendVehicleToFrontend = (v) => ({
